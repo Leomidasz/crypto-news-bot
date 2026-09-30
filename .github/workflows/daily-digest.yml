@@ -1,0 +1,71 @@
+# สรุปข่าวคริปโตอัตโนมัติทุกเช้า → อัปเดตเว็บแอป + แจ้งเตือน Telegram
+name: Daily crypto digest
+
+on:
+  schedule:
+    # 23:40 UTC = 06:40 เวลาไทย (GitHub อาจดีเลย์ 5-30 นาที → เสร็จทันก่อน 7 โมงเกือบทุกวัน)
+    - cron: "40 23 * * *"
+  workflow_dispatch:        # ปุ่ม "Run workflow" สำหรับกดรันเองได้ทุกเมื่อ (กดจากแอป GitHub ในมือถือได้)
+    inputs:
+      hours:
+        description: "สรุปย้อนหลังกี่ชั่วโมง"
+        default: "24"
+
+permissions:
+  contents: write           # ให้ commit ไฟล์สรุปใหม่เข้า repo ได้
+
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ความจำโพสต์/ID บัญชีที่เคยดึงแล้ว → ไม่เสียค่า X API ซ้ำ
+      - name: Restore cache database
+        uses: actions/cache@v4
+        with:
+          path: newsbot.db
+          key: newsbot-db-${{ github.run_id }}
+          restore-keys: newsbot-db-
+
+      - name: Fetch + summarize + save
+        env:
+          # --- กุญแจลับ: Settings → Secrets and variables → Actions → Secrets ---
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+          # --- ค่าทั่วไป (แก้ง่าย): Settings → Secrets and variables → Actions → Variables ---
+          X_ACCOUNTS: ${{ vars.X_ACCOUNTS }}
+          DISCORD_CHANNEL_IDS: ${{ vars.DISCORD_CHANNEL_IDS }}
+          APP_URL: ${{ vars.APP_URL }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'claude-sonnet-5-5' }}
+          X_MAX_POSTS_PER_ACCOUNT: ${{ vars.X_MAX_POSTS_PER_ACCOUNT || '20' }}
+        run: python publish.py ${{ github.event.inputs.hours || '24' }}
+
+      - name: Commit new digest
+        run: |
+          git config user.name "digest-bot"
+          git config user.email "digest-bot@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "ไม่มีอะไรเปลี่ยน"
+            exit 0
+          fi
+          git commit -m "สรุปข่าว $(TZ=Asia/Bangkok date +'%Y-%m-%d %H:%M')"
+          git pull --rebase
+          git push

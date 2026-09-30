@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ข่าวเช้า</title>
+<meta name="description" content="สรุปข่าวคริปโตจาก X และ Discord ทุกเช้า">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ข่าวเช้า">
+<meta name="theme-color" content="#1C2531">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDF1F5;
+    --surface: #F7F9FB;
+    --ink: #1C2531;
+    --muted: #5B6878;
+    --rule: #D3DAE3;
+    --focus: #2F6FE4;
+    --mood: #56657A;
+    --on-mood: #FFFFFF;
+    --warn-bg: #FFF4DC;
+    --warn-ink: #6E4A08;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #151B23;
+      --surface: #1C2430;
+      --ink: #E4E9EF;
+      --muted: #97A3B2;
+      --rule: #2C3644;
+      --focus: #7AA7FF;
+      --warn-bg: #3A2E14;
+      --warn-ink: #F2D18C;
+    }
+  }
+  body[data-mood="bullish"] { --mood: #1F7A63; }
+  body[data-mood="bearish"] { --mood: #A8323F; }
+  body[data-mood="mixed"]   { --mood: #98600F; }
+  body[data-mood="neutral"] { --mood: #56657A; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 17px/1.65 "Anuphan", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  /* ---------- mood band (the one bold element) ---------- */
+  .band {
+    position: relative;
+    overflow: hidden;
+    background: var(--mood);
+    color: var(--on-mood);
+    padding: calc(env(safe-area-inset-top) + 14px) 20px 28px;
+    transition: background-color .4s ease;
+  }
+  .band .wrap { position: relative; z-index: 1; }
+  .sun {
+    position: absolute; right: -60px; bottom: -120px;
+    width: 260px; height: 260px; border-radius: 50%;
+    background: rgba(255,255,255,.14);
+    box-shadow: 0 0 0 36px rgba(255,255,255,.06), 0 0 0 72px rgba(255,255,255,.035);
+    animation: rise 1.4s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes rise { from { transform: translateY(90px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .sun { animation: none; } .band { transition: none; } }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 26px; }
+  .brand { font-weight: 600; font-size: 16px; letter-spacing: .01em; }
+  .tools { display: flex; gap: 8px; }
+  .icon-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 40px; padding: 0 14px;
+    border: 1px solid rgba(255,255,255,.45); border-radius: 999px;
+    background: rgba(255,255,255,.1); color: var(--on-mood);
+    font-size: 15px; cursor: pointer;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.2); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  .mood-line { font-size: 15px; opacity: .92; margin: 0 0 6px; }
+  .headline {
+    margin: 0;
+    font-size: clamp(26px, 7.4vw, 36px);
+    line-height: 1.32;
+    font-weight: 700;
+    letter-spacing: -.005em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+  .meta { margin: 16px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; opacity: .88; }
+
+  /* ---------- filter bar ---------- */
+  .filters {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+  }
+  .filters .wrap {
+    display: flex; gap: 8px; overflow-x: auto; padding: 12px 20px;
+    scrollbar-width: none;
+  }
+  .filters .wrap::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; min-height: 38px; padding: 0 14px;
+    border: 1px solid var(--rule); border-radius: 999px;
+    background: var(--surface); cursor: pointer; font-size: 15px;
+    white-space: nowrap;
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .chip .n { color: var(--muted); margin-left: 4px; }
+  .chip[aria-pressed="true"] .n { color: inherit; opacity: .7; }
+
+  /* ---------- sections + items ---------- */
+  main { padding: 8px 20px calc(env(safe-area-inset-bottom) + 48px); }
+  section { margin-top: 28px; }
+  section h2 { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+  .items { list-style: none; margin: 0; padding: 0; }
+  .item { display: grid; grid-template-columns: 4px 1fr; gap: 14px; padding: 16px 0; border-top: 1px solid var(--rule); }
+  .item:first-child { border-top: 0; }
+  .imp { border-radius: 2px; background: var(--rule); }
+  .item[data-imp="high"] .imp { background: var(--mood); }
+  .item[data-imp="medium"] .imp { background: color-mix(in srgb, var(--mood) 40%, var(--rule)); }
+  .item h3 { margin: 0; font-size: 18px; line-height: 1.45; font-weight: 600; }
+  .rank { color: var(--mood); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .item p { margin: 6px 0 0; color: var(--ink); opacity: .9; }
+  .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .unv {
+    display: inline-block; font-size: 13px; line-height: 1; padding: 5px 8px; margin-left: 6px; vertical-align: 3px;
+    border: 1.5px dashed currentColor; border-radius: 6px; color: var(--warn-ink); background: var(--warn-bg); font-weight: 500;
+  }
+  .src { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1px 8px; }
+  .link {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 2px;
+    color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule);
+  }
+  .link:hover { text-decoration-color: var(--ink); }
+
+  .notes { margin-top: 36px; font-size: 14px; color: var(--muted); }
+  .notes summary { cursor: pointer; padding: 8px 0; }
+  .notes ul { margin: 4px 0 0; padding-left: 18px; }
+
+  .state { padding: 48px 4px; text-align: left; }
+  .state h2 { font-size: 20px; margin: 0 0 8px; }
+  .state p { margin: 0 0 8px; color: var(--muted); }
+  .banner { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); font-size: 14px; }
+
+  /* ---------- history sheet ---------- */
+  dialog {
+    width: 100%; max-width: 640px; max-height: 80vh; margin: auto auto 0;
+    padding: 0; border: 0; border-radius: 18px 18px 0 0;
+    background: var(--paper); color: var(--ink);
+  }
+  dialog::backdrop { background: rgba(10,15,22,.5); }
+  dialog[open] { animation: sheet .25s ease-out; }
+  @keyframes sheet { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { dialog[open] { animation: none; } }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 8px; position: sticky; top: 0; background: var(--paper); }
+  .sheet-head h2 { margin: 0; font-size: 19px; }
+  .close { min-height: 40px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); cursor: pointer; }
+  .hist { list-style: none; margin: 0; padding: 0 12px calc(env(safe-area-inset-bottom) + 16px); }
+  .hist button {
+    width: 100%; display: grid; grid-template-columns: 12px 1fr; gap: 12px; align-items: start;
+    text-align: left; padding: 12px 8px; border: 0; border-top: 1px solid var(--rule); background: none; cursor: pointer; border-radius: 0;
+  }
+  .hist li:first-child button { border-top: 0; }
+  .hist button[aria-current="true"] { background: var(--surface); border-radius: 10px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; }
+  .hist .when { display: flex; gap: 14px; font-size: 14px; color: var(--muted); }
+  .hist .h { display: block; font-weight: 500; line-height: 1.45; }
+</style>
+</head>
+<body data-mood="neutral">
+  <header class="band">
+    <div class="sun" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="topbar">
+        <span class="brand">ข่าวเช้า</span>
+        <div class="tools">
+          <button class="icon-btn" id="refresh" type="button" aria-label="โหลดใหม่">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          </button>
+          <button class="icon-btn" id="openHistory" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            ย้อนหลัง
+          </button>
+        </div>
+      </div>
+      <p class="mood-line" id="moodLine">กำลังโหลด…</p>
+      <h1 class="headline" id="headline">&nbsp;</h1>
+      <p class="meta" id="meta"></p>
+    </div>
+  </header>
+
+  <nav class="filters" aria-label="กรองตามหมวด" hidden id="filters"><div class="wrap" id="chips"></div></nav>
+
+  <main class="wrap" id="main" aria-live="polite"></main>
+
+  <dialog id="history" aria-labelledby="histTitle">
+    <div class="sheet-head">
+      <h2 id="histTitle">สรุปย้อนหลัง</h2>
+      <button class="close" type="button" id="closeHistory">ปิด</button>
+    </div>
+    <ul class="hist" id="histList"></ul>
+  </dialog>
+
+<script>
+const CATS = {
+  key: "🔥 ประเด็นสำคัญ",
+  market: "📈 ตลาดและราคา",
+  projects: "🧩 โปรเจกต์ / เหรียญ",
+  regulation: "⚖️ กฎหมาย / Regulation",
+  airdrop: "🎁 Airdrop / โอกาส",
+};
+const SHORT = { key: "สำคัญ", market: "ตลาด", projects: "โปรเจกต์", regulation: "กฎหมาย", airdrop: "Airdrop" };
+const MOOD = { bullish: "บวก", bearish: "ลบ", neutral: "ทรงตัว", mixed: "ผสม" };
+const MOOD_HEX = { bullish: "#1F7A63", bearish: "#A8323F", neutral: "#56657A", mixed: "#98600F" };
+
+const $ = (id) => document.getElementById(id);
+let index = [];
+let current = null;
+let filter = "all";
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+}
+
+function when(iso, withRel = true) {
+  const d = new Date(iso);
+  const abs = d.toLocaleString("th-TH", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  if (!withRel) return abs;
+  const mins = Math.round((Date.now() - d) / 60000);
+  const rel = mins < 60 ? `${Math.max(mins, 1)} นาทีที่แล้ว` : mins < 1440 ? `${Math.round(mins / 60)} ชม.ที่แล้ว` : `${Math.round(mins / 1440)} วันที่แล้ว`;
+  return `${abs} น. (${rel})`;
+}
+
+function safeUrl(u) {
+  try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; }
+}
+
+function linkLabel(u) {
+  const h = new URL(u).hostname.replace("www.", "");
+  if (h.endsWith("x.com") || h.endsWith("twitter.com")) return "เปิดโพสต์ใน X";
+  if (h.endsWith("discord.com")) return "เปิดใน Discord";
+  return `เปิด ${h}`;
+}
+
+async function getJSON(path) {
+  const r = await fetch(path, { cache: "no-cache" });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function renderEmpty(title, lines) {
+  document.body.dataset.mood = "neutral";
+  $("moodLine").textContent = "ยังไม่มีสรุป";
+  $("headline").textContent = "สรุปแรกจะมาถึงเช้าพรุ่งนี้";
+  $("meta").textContent = "";
+  $("filters").hidden = true;
+  const box = el("div", { class: "state" }, el("h2", { text: title }));
+  lines.forEach((l) => box.append(el("p", { text: l })));
+  $("main").replaceChildren(box);
+}
+
+function renderChips(items) {
+  const counts = items.reduce((a, i) => ((a[i.category] = (a[i.category] || 0) + 1), a), {});
+  const chips = [["all", "ทั้งหมด", items.length], ...Object.keys(CATS).filter((c) => counts[c]).map((c) => [c, SHORT[c], counts[c]])];
+  if (!chips.some(([k]) => k === filter)) filter = "all";
+  $("chips").replaceChildren(...chips.map(([k, label, n]) => {
+    const b = el("button", { class: "chip", type: "button", "aria-pressed": String(filter === k) }, label, el("span", { class: "n", text: String(n) }));
+    b.onclick = () => { filter = k; render(current); window.scrollTo({ top: $("filters").offsetTop, behavior: "smooth" }); };
+    return b;
+  }));
+  $("filters").hidden = items.length === 0;
+}
+
+function renderItem(it, rank) {
+  const h3 = el("h3", {}, rank ? el("span", { class: "rank", text: `${rank}.` }) : null, it.title,
+    it.unverified ? el("span", { class: "unv", text: "ยังไม่ยืนยัน" }) : null);
+  const foot = el("div", { class: "foot" });
+  (it.sources || []).forEach((s) => foot.append(el("span", { class: "src", text: s })));
+  (it.links || []).map(safeUrl).filter(Boolean).forEach((u) =>
+    foot.append(el("a", { class: "link", href: u, target: "_blank", rel: "noopener noreferrer", text: linkLabel(u) })));
+  return el("li", { class: "item", "data-imp": it.importance },
+    el("span", { class: "imp", "aria-hidden": "true" }),
+    el("div", {}, h3, el("p", { text: it.summary }), foot.childNodes.length ? foot : null));
+}
+
+function render(d) {
+  current = d;
+  document.body.dataset.mood = d.mood || "neutral";
+  document.querySelector('meta[name="theme-color"]').content = MOOD_HEX[d.mood] || "#1C2531";
+  $("moodLine").textContent = `บรรยากาศตลาด: ${MOOD[d.mood] || "ผสม"}`;
+  $("headline").textContent = d.headline || "สรุปข่าวคริปโต";
+  const c = d.counts || {};
+  $("meta").replaceChildren(
+    el("span", { text: when(d.generated_at) }),
+    el("span", { text: `ย้อนหลัง ${d.hours || 24} ชม.` }),
+    el("span", { text: `X ${c.x ?? 0} โพสต์` }),
+    el("span", { text: `Discord ${c.discord ?? 0} ข้อความ` }),
+  );
+
+  const items = d.items || [];
+  renderChips(items);
+  const main = [];
+  if (!navigator.onLine) main.push(el("p", { class: "banner", text: "ออฟไลน์อยู่ กำลังแสดงสรุปที่โหลดไว้ล่าสุด" }));
+
+  if (!items.length) {
+    main.push(el("div", { class: "state" }, el("h2", { text: "ไม่มีข่าวใหม่ในรอบนี้" }),
+      el("p", { text: "บัญชีที่ติดตามไม่ได้โพสต์อะไรในช่วงเวลานี้ หรือดึงข้อมูลไม่สำเร็จ ดูรายละเอียดด้านล่าง" })));
+  }
+  for (const cat of Object.keys(CATS)) {
+    if (filter !== "all" && filter !== cat) continue;
+    const list = items.filter((i) => i.category === cat);
+    if (!list.length) continue;
+    const ul = el("ul", { class: "items" }, ...list.map((it, i) => renderItem(it, cat === "key" ? i + 1 : 0)));
+    main.push(el("section", { "aria-labelledby": `h-${cat}` }, el("h2", { id: `h-${cat}`, text: CATS[cat] }), ul));
+  }
+  if (d.notes && d.notes.length) {
+    const det = el("details", { class: "notes" }, el("summary", { text: `คำเตือนจากระบบ (${d.notes.length})` }),
+      el("ul", {}, ...d.notes.map((n) => el("li", { text: n }))));
+    main.push(det);
+  }
+  $("main").replaceChildren(...main);
+  renderHistory();
+}
+
+function renderHistory() {
+  $("histList").replaceChildren(...index.map((e) => {
+    const b = el("button", { type: "button", "aria-current": String(current && location.hash.slice(1) === e.id || (!location.hash && e === index[0])) },
+      el("span", { class: "dot", style: `background:${MOOD_HEX[e.mood] || "#56657A"}`, "aria-hidden": "true" }),
+      el("span", {}, el("span", { class: "when" }, el("span", { text: when(e.generated_at, false) + " น." }), el("span", { text: `${e.count} ประเด็น` })), el("span", { class: "h", text: e.headline })));
+    b.onclick = () => { $("history").close(); location.hash = e.id; };
+    return el("li", {}, b);
+  }));
+}
+
+async function load() {
+  try {
+    index = await getJSON("data/index.json");
+  } catch {
+    return renderEmpty("ยังโหลดสรุปไม่ได้", [
+      "ถ้าเพิ่งตั้งค่าเสร็จ: เข้า GitHub → แท็บ Actions → Daily crypto digest → Run workflow เพื่อสร้างสรุปแรกทันที",
+      "ถ้าออฟไลน์อยู่: ต่อเน็ตแล้วกดปุ่มโหลดใหม่มุมขวาบน",
+    ]);
+  }
+  if (!index.length) {
+    return renderEmpty("ยังไม่มีสรุป", [
+      "ระบบจะสรุปให้อัตโนมัติทุกเช้าประมาณ 06:40 น.",
+      "อยากดูเลยตอนนี้: เข้า GitHub → แท็บ Actions → Daily crypto digest → Run workflow",
+    ]);
+  }
+  const id = decodeURIComponent(location.hash.slice(1));
+  const entry = index.find((e) => e.id === id) || index[0];
+  try {
+    render(await getJSON(`data/${entry.id}.json`));
+  } catch {
+    renderEmpty("เปิดสรุปนี้ไม่ได้", ["ต่อเน็ตแล้วกดปุ่มโหลดใหม่มุมขวาบน"]);
+  }
+}
+
+$("openHistory").onclick = () => { renderHistory(); $("history").showModal(); };
+$("closeHistory").onclick = () => $("history").close();
+$("history").addEventListener("click", (e) => { if (e.target === $("history")) $("history").close(); });
+$("refresh").onclick = () => { filter = "all"; load(); };
+window.addEventListener("hashchange", () => { filter = "all"; load(); window.scrollTo(0, 0); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") load(); });
+
+load();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
