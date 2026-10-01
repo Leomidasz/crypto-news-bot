@@ -56,12 +56,18 @@ async def notify(text: str) -> None:
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient(timeout=20) as client:
         for chat_id in config.TELEGRAM_NOTIFY_CHAT_IDS:
-            r = await client.post(url, json={
-                "chat_id": chat_id, "text": text[:4000],
-                "link_preview_options": {"is_disabled": True},
-            })
+            try:
+                r = await client.post(url, json={
+                    "chat_id": chat_id, "text": text[:4000],
+                    "link_preview_options": {"is_disabled": True},
+                })
+            except httpx.HTTPError as e:
+                # ไม่พิมพ์ข้อความ error เต็ม เพราะบางแบบมี URL ที่มี token อยู่ข้างใน
+                print(f"แจ้งเตือน Telegram ไม่สำเร็จ: เชื่อมต่อไม่ได้ ({type(e).__name__})")
+                continue
             if r.status_code != 200:
-                print(f"แจ้งเตือน Telegram ไม่สำเร็จ ({chat_id}): {r.status_code}")
+                hint = {401: "token ไม่ถูกต้อง", 400: "chat id ผิด", 403: "ยังไม่ได้กด Start ที่บอท"}
+                print(f"แจ้งเตือน Telegram ไม่สำเร็จ: {r.status_code} {hint.get(r.status_code, '')}")
 
 
 def notify_text(digest: dict, entry_id: str) -> str:

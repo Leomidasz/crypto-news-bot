@@ -69,9 +69,9 @@ python -m venv .venv
 (ถ้าขึ้น error เรื่อง execution policy ให้รัน `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` แล้วลองใหม่)
 
 ```powershell
-pip install -r requirements.txt
+pip install --require-hashes --no-deps -r requirements.lock
 ```
-→ ติดตั้งไลบรารีที่บอทต้องใช้ (Telegram, Claude, httpx)
+→ ติดตั้งไลบรารีที่บอทต้องใช้ (Telegram, Claude, httpx) แบบล็อกเวอร์ชัน + เช็กลายนิ้วมือไฟล์
 
 ---
 
@@ -301,6 +301,32 @@ GitHub จะเป็นทั้ง "เครื่องรันบอท" 
 
 ---
 
+## 🔒 ความปลอดภัย (สำหรับ repo แบบ Public)
+
+**ช่องทางที่คนอาจพยายามขโมยกุญแจ และวิธีที่ระบบนี้ป้องกันไว้:**
+
+| ช่องทางโจมตี | ป้องกันยังไง |
+|---|---|
+| ค้นหากุญแจในโค้ด / ประวัติการแก้ไข | ไม่มีกุญแจในโค้ดเลย อยู่ใน Secrets ทั้งหมด, `.env` ถูกกันไม่ให้อัปโหลด |
+| ส่ง pull request ที่แก้โค้ดให้แอบส่งกุญแจออกไป | workflow ไม่รันกับ pull request จากคนนอกเลย + ตั้งให้ต้องอนุมัติก่อน (ดูด้านล่าง) |
+| เจาะ action ของคนอื่นที่ workflow ใช้ แล้วแอบเปลี่ยนโค้ด | ล็อก action ด้วยรหัส commit (SHA) เปลี่ยนไม่ได้ |
+| ปล่อยไลบรารี Python เวอร์ชันปลอมที่ขโมยกุญแจ | ล็อกเวอร์ชัน + ลายนิ้วมือไฟล์ใน `requirements.lock` ไฟล์ไม่ตรง = ติดตั้งไม่ผ่าน |
+| อ่านกุญแจจาก log การรัน (เห็นได้ทุกคน) | GitHub ซ่อน Secrets เป็น `***` + โค้ดสั่งซ่อนซ้ำอีกชั้น + ข้อความ error ไม่พิมพ์ URL ที่มี token |
+| ส่งค่าแปลกๆ ผ่านช่อง "กี่ชั่วโมง" ให้รันคำสั่งอันตราย | รับเฉพาะตัวเลข 1–168 ค่าอื่นถูกเปลี่ยนเป็น 24 |
+| โพสต์ใน X/Discord ที่ฝังลิงก์หลอกหรือโค้ดอันตราย | ลิงก์ในแอปต้องตรงกับลิงก์ต้นฉบับเท่านั้น, หน้าเว็บแสดงเป็นข้อความล้วน รันโค้ดแปลกปลอมไม่ได้ |
+| ขโมยรหัสผ่านบัญชี GitHub | **เปิด 2FA** (สำคัญที่สุด ดูด้านล่าง) |
+
+**ตั้งค่าเพิ่ม 4 อย่าง (ทำครั้งเดียว ~5 นาที):**
+1. **เปิด 2FA:** https://github.com/settings/security → Two-factor authentication → Enable → เก็บ Recovery codes ไว้ให้ดี
+2. **บังคับอนุมัติ workflow จากคนนอก:** repo → Settings → Actions → General → หัวข้อ *Approval for running fork pull request workflows from contributors* → เลือก **Require approval for all external contributors** → Save
+3. **เปิดระบบตรวจกุญแจหลุด:** repo → Settings → Advanced Security (หรือ Code security) → เปิด **Secret Protection / Secret scanning** และ **Push protection** (ฟรีสำหรับ repo Public) → ถ้ามีใครเผลออัปโหลดกุญแจ GitHub จะบล็อกให้
+4. **เปิดแจ้งเตือนไลบรารีมีช่องโหว่:** หน้าเดียวกัน → เปิด **Dependabot alerts**
+
+**ถ้าสงสัยว่ากุญแจหลุด:** เปลี่ยนกุญแจใหม่ที่ต้นทางทันที (BotFather `/revoke`, X console Regenerate, Discord Reset Token, Anthropic console ลบ key) แล้วใส่ค่าใหม่ใน Secrets — กุญแจเก่าจะใช้ไม่ได้ทันที
+**จำกัดความเสียหายเรื่องเงิน:** ตั้งวงเงินสูงสุดต่อเดือนใน Anthropic console (Limits) และเติมเครดิต X ทีละน้อย → ต่อให้หลุด ก็เสียได้ไม่เกินยอดนั้น
+
+---
+
 ## แก้ปัญหา
 
 | ข้อความที่เจอ | สาเหตุ / วิธีแก้ |
@@ -351,6 +377,7 @@ text = await build_digest(12)   # ได้ข้อความสรุป แ
 | `bot.py` | ตัวบอท Telegram + คำสั่งทั้งหมด (แบบ B) |
 | `publish.py` | สรุปรอบเช้า → บันทึกไฟล์ให้แอป + แจ้งเตือน Telegram (แบบ A) |
 | `.github/workflows/daily-digest.yml` | ตารางเวลาให้ GitHub รัน `publish.py` ทุกเช้า |
+| `requirements.lock` | รายชื่อไลบรารีแบบล็อกเวอร์ชัน + ลายนิ้วมือ (ใช้ติดตั้งจริง) |
 | `docs/` | ตัวแอปมือถือ (หน้าเว็บ, ไอคอน) และ `docs/data/` เก็บสรุปแต่ละวัน |
 | `run_once.py` | ทดสอบสรุปในหน้าจอ ไม่ผ่าน Telegram |
 | `digest.py` | รวมขั้นตอน: ดึง X + Discord พร้อมกัน → สรุป |
