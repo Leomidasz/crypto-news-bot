@@ -11,8 +11,8 @@ name: Daily crypto digest
 
 on:
   schedule:
-    # 23:40 UTC = 06:40 เวลาไทย (GitHub อาจดีเลย์ 5-30 นาที บางวันมากกว่า)
-    - cron: "40 23 * * *"
+    # 21:10 UTC = 04:10 เวลาไทย — GitHub มักดีเลย์ 2-3 ชม. ช่วงเช้าเอเชีย → สรุปมาถึงราว 6-7 โมง
+    - cron: "10 21 * * *"
   workflow_dispatch:        # ปุ่ม "Run workflow" สำหรับกดรันเองได้ทุกเมื่อ (เฉพาะเจ้าของ repo)
     inputs:
       hours:
